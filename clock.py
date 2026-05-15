@@ -33,7 +33,7 @@ class Clock(QWidget):
         self.time_label.setAlignment(Qt.AlignCenter)
         time_font = QFont("Monospace", 52, QFont.Bold)
         self.time_label.setFont(time_font)
-        self.time_label.setStyleSheet("color: white; text-shadow: 0 2px 8px rgba(0,0,0,0.8);")
+        self.time_label.setStyleSheet("color: white;")
 
         self.date_label = QLabel()
         self.date_label.setAlignment(Qt.AlignCenter)

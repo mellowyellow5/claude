@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Steam Deck Clock
+Comment=Transparent desktop clock with date
+Exec=python3 %f/clock.py
+Icon=clock
+Terminal=false
+Type=Application
+Categories=Utility;
+Keywords=clock;time;date;desktop;
+StartupNotify=false

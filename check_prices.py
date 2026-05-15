@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import requests
@@ -18,6 +19,7 @@ GAMES_FILE = Path(__file__).parent / "games.yaml"
 STATE_FILE = Path(__file__).parent / "state.json"
 
 ITAD_PRICES_URL = "https://api.isthereanydeal.com/games/prices/v3"
+ITAD_HISTORY_URL = "https://api.isthereanydeal.com/games/history/v3"
 
 
 def load_games():
@@ -61,6 +63,42 @@ def get_lowest_price_sek(price_data):
     if not prices:
         return None
     return min(deal["price"]["amount"] for deal in prices)
+
+
+def fetch_history(itad_ids, days=30):
+    """Fetch price history for the last `days` days for a list of ITAD game IDs."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    params = {
+        "key": ITAD_API_KEY,
+        "country": "SE",
+        "since": int(since.timestamp()),
+    }
+    response = requests.post(
+        ITAD_HISTORY_URL,
+        params=params,
+        json=itad_ids,
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def history_low(history_data, since_hours=None):
+    """Return the lowest price from history entries, optionally limited to the last N hours."""
+    cutoff = None
+    if since_hours is not None:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=since_hours)
+
+    low = None
+    for entry in history_data:
+        if cutoff is not None:
+            ts = datetime.fromtimestamp(entry["timestamp"], tz=timezone.utc)
+            if ts < cutoff:
+                continue
+        amount = entry["deal"]["price"]["amount"]
+        if low is None or amount < low:
+            low = amount
+    return low
 
 
 def notify_desktop(title, message):
@@ -107,8 +145,14 @@ def main():
     except requests.RequestException as e:
         sys.exit(f"Failed to fetch prices from ITAD: {e}")
 
-    # raw is a list of objects keyed by itad_id
+    try:
+        history_raw = fetch_history(itad_ids, days=30)
+    except requests.RequestException as e:
+        print(f"Warning: could not fetch price history: {e}", file=sys.stderr)
+        history_raw = []
+
     price_map = {item["id"]: item for item in raw}
+    history_map = {item["id"]: item.get("history", []) for item in history_raw}
 
     for game in games:
         gid = game["itad_id"]
@@ -125,7 +169,15 @@ def main():
             print(f"  [{name}] No deals found currently.")
             continue
 
-        print(f"  [{name}] Current lowest: {price:.2f} SEK (threshold: {threshold} SEK)")
+        hist = history_map.get(gid, [])
+        low_24h = history_low(hist, since_hours=24)
+        low_30d = history_low(hist)
+
+        print(f"  [{name}]")
+        print(f"    Current:   {price:.2f} SEK")
+        print(f"    24hr low:  {f'{low_24h:.2f} SEK' if low_24h is not None else 'n/a'}")
+        print(f"    30day low: {f'{low_30d:.2f} SEK' if low_30d is not None else 'n/a'}")
+        print(f"    Threshold: {threshold} SEK")
 
         was_alerted = state.get(gid, {}).get("alerted", False)
 

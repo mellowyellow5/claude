@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import sys
-from PyQt5.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QGraphicsDropShadowEffect, QLabel, QVBoxLayout, QWidget
 from PyQt5.QtCore import Qt, QTimer, QPoint
 from PyQt5.QtGui import QFont, QColor, QPainter, QFontDatabase
 from datetime import datetime
@@ -34,12 +34,22 @@ class Clock(QWidget):
         time_font = QFont("Monospace", 52, QFont.Bold)
         self.time_label.setFont(time_font)
         self.time_label.setStyleSheet("color: white;")
+        time_shadow = QGraphicsDropShadowEffect()
+        time_shadow.setBlurRadius(12)
+        time_shadow.setOffset(2, 2)
+        time_shadow.setColor(QColor(0, 0, 0, 180))
+        self.time_label.setGraphicsEffect(time_shadow)
 
         self.date_label = QLabel()
         self.date_label.setAlignment(Qt.AlignCenter)
         date_font = QFont("Monospace", 16)
         self.date_label.setFont(date_font)
         self.date_label.setStyleSheet("color: rgba(220, 220, 220, 0.9);")
+        date_shadow = QGraphicsDropShadowEffect()
+        date_shadow.setBlurRadius(8)
+        date_shadow.setOffset(1, 1)
+        date_shadow.setColor(QColor(0, 0, 0, 160))
+        self.date_label.setGraphicsEffect(date_shadow)
 
         layout.addWidget(self.time_label)
         layout.addWidget(self.date_label)

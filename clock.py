@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import sys
-from PyQt5.QtWidgets import QApplication, QGraphicsDropShadowEffect, QLabel, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QGraphicsDropShadowEffect, QLabel, QMenu, QSystemTrayIcon, QVBoxLayout, QWidget
 from PyQt5.QtCore import Qt, QTimer, QPoint
-from PyQt5.QtGui import QFont, QColor, QPainter, QFontDatabase
+from PyQt5.QtGui import QFont, QColor, QIcon, QPainter, QFontDatabase
 from datetime import datetime
 
 
@@ -11,6 +11,7 @@ class Clock(QWidget):
         super().__init__()
         self._drag_pos = None
         self._init_ui()
+        self._init_tray()
         timer = QTimer(self)
         timer.timeout.connect(self._tick)
         timer.start(1000)
@@ -57,6 +58,35 @@ class Clock(QWidget):
         self.setLayout(layout)
         self.move(40, 40)
 
+    def _init_tray(self):
+        self._tray = QSystemTrayIcon(QIcon.fromTheme("clock"), self)
+        self._tray.setToolTip("Steam Deck Clock")
+        menu = QMenu()
+        self._show_action = menu.addAction("Show")
+        self._show_action.setCheckable(True)
+        self._show_action.setChecked(True)
+        self._show_action.triggered.connect(self._toggle_visibility)
+        menu.addSeparator()
+        menu.addAction("Quit", QApplication.instance().quit)
+        menu.aboutToShow.connect(self._update_show_action)
+        self._tray.setContextMenu(menu)
+        self._tray.activated.connect(self._tray_clicked)
+        self._tray.show()
+
+    def _update_show_action(self):
+        self._show_action.setChecked(self.isVisible())
+
+    def _toggle_visibility(self):
+        if self.isVisible():
+            self.hide()
+        else:
+            self.show()
+            self.raise_()
+
+    def _tray_clicked(self, reason):
+        if reason == QSystemTrayIcon.Trigger:  # single left-click
+            self._toggle_visibility()
+
     def _tick(self):
         now = datetime.now()
         self.time_label.setText(now.strftime("%H:%M:%S"))
@@ -85,12 +115,13 @@ class Clock(QWidget):
             self._drag_pos = None
 
     def mouseDoubleClickEvent(self, event):
-        self.close()
+        self.hide()
 
 
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Steam Deck Clock")
+    app.setQuitOnLastWindowClosed(False)  # keep running when clock is hidden to tray
     clock = Clock()
     clock.show()
     sys.exit(app.exec_())

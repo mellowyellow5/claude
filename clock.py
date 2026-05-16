@@ -73,13 +73,16 @@ class Clock(QWidget):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+            self.grabMouse()  # route all mouse events here even if cursor leaves the window
 
     def mouseMoveEvent(self, event):
-        if event.buttons() == Qt.LeftButton and self._drag_pos:
+        if self._drag_pos is not None:
             self.move(event.globalPos() - self._drag_pos)
 
     def mouseReleaseEvent(self, event):
-        self._drag_pos = None
+        if event.button() == Qt.LeftButton:
+            self.releaseMouse()
+            self._drag_pos = None
 
     def mouseDoubleClickEvent(self, event):
         self.close()

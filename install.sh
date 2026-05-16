@@ -7,9 +7,10 @@ DESKTOP_FILE="$HOME/.local/share/applications/steam-deck-clock.desktop"
 AUTOSTART_FILE="$HOME/.config/autostart/steam-deck-clock.desktop"
 
 # Check dependency
-if ! python3 -c "from PyQt5.QtWidgets import QApplication" 2>/dev/null; then
+if ! $HOME/clock-env/bin/python3 -c "from PyQt5.QtWidgets import QApplication" 2>/dev/null; then
     echo "PyQt5 not found. Installing..."
-    pip install PyQt5 --user
+    python3 -m venv ~/clock-env
+    ~/clock-env/bin/pip install PyQt5
 fi
 
 chmod +x "$CLOCK"
@@ -19,7 +20,7 @@ cat > "$DESKTOP_FILE" <<EOF
 [Desktop Entry]
 Name=Steam Deck Clock
 Comment=Transparent desktop clock with date
-Exec=python3 $CLOCK
+Exec=$HOME/clock-env/bin/python3 $CLOCK
 Icon=clock
 Terminal=false
 Type=Application
@@ -38,5 +39,5 @@ if [[ "$answer" =~ ^[Yy]$ ]]; then
 fi
 
 echo ""
-echo "Done! Run it now with:  python3 $CLOCK"
+echo "Done! Run it now with: $HOME/clock-env/bin/python3 $CLOCK"
 echo "Or find 'Steam Deck Clock' in your app menu."

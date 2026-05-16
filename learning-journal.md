@@ -53,7 +53,7 @@ python3 -c 'from PyQt5.QtWidgets import QApplication; print("PyQt5 works!")'
 ```
 
 **Left open:**
-- `install.sh` still uses broken `pip install PyQt5 --user` — needs updating to use venv approach
+- ~~`install.sh` still uses broken `pip install PyQt5 --user` — needs updating to use venv approach~~ — **Fixed:** install.sh already uses the venv approach
 - `text-shadow` in the stylesheet should be replaced with `QGraphicsDropShadowEffect`
 - Clock autostart not yet configured
 - The drag behaviour can break if mouse moves faster than the window — worth exploring `grabMouse()`

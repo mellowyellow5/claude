@@ -1,21 +1,38 @@
 #!/usr/bin/env python3
+import json
+import os
 import sys
 from PyQt5.QtWidgets import QApplication, QGraphicsDropShadowEffect, QLabel, QMenu, QSystemTrayIcon, QVBoxLayout, QWidget
-from PyQt5.QtCore import Qt, QTimer, QPoint
-from PyQt5.QtGui import QFont, QColor, QIcon, QPainter, QFontDatabase
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QFont, QColor, QIcon, QPainter
 from datetime import datetime
+
+CONFIG_PATH = os.path.expanduser("~/.config/steam-deck-clock.json")
 
 
 class Clock(QWidget):
     def __init__(self):
         super().__init__()
         self._drag_pos = None
+        self._config = self._load_config()
+        self._use_24h = self._config.get("use_24h", True)
         self._init_ui()
         self._init_tray()
         timer = QTimer(self)
         timer.timeout.connect(self._tick)
         timer.start(1000)
         self._tick()
+
+    def _load_config(self):
+        try:
+            with open(CONFIG_PATH) as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    def _save_config(self):
+        with open(CONFIG_PATH, "w") as f:
+            json.dump({"x": self.x(), "y": self.y(), "use_24h": self._use_24h}, f)
 
     def _init_ui(self):
         self.setWindowFlags(
@@ -56,7 +73,7 @@ class Clock(QWidget):
         layout.addWidget(self.date_label)
 
         self.setLayout(layout)
-        self.move(40, 40)
+        self.move(self._config.get("x", 40), self._config.get("y", 40))
 
     def _init_tray(self):
         self._tray = QSystemTrayIcon(QIcon.fromTheme("clock"), self)
@@ -66,6 +83,11 @@ class Clock(QWidget):
         self._show_action.setCheckable(True)
         self._show_action.setChecked(True)
         self._show_action.triggered.connect(self._toggle_visibility)
+        menu.addSeparator()
+        self._24h_action = menu.addAction("24-hour clock")
+        self._24h_action.setCheckable(True)
+        self._24h_action.setChecked(self._use_24h)
+        self._24h_action.triggered.connect(self._toggle_24h)
         menu.addSeparator()
         menu.addAction("Quit", QApplication.instance().quit)
         menu.aboutToShow.connect(self._update_show_action)
@@ -83,13 +105,25 @@ class Clock(QWidget):
             self.show()
             self.raise_()
 
+    def _toggle_24h(self, checked):
+        self._use_24h = checked
+        self._save_config()
+        self._tick()  # update display immediately
+
     def _tray_clicked(self, reason):
         if reason == QSystemTrayIcon.Trigger:  # single left-click
             self._toggle_visibility()
 
     def _tick(self):
         now = datetime.now()
-        self.time_label.setText(now.strftime("%H:%M:%S"))
+        if self._use_24h:
+            self.time_label.setText(now.strftime("%H:%M:%S"))
+        else:
+            time_str = now.strftime("%I:%M:%S")
+            ampm = now.strftime("%p")
+            self.time_label.setText(
+                f'{time_str} <span style="font-size:20pt; font-weight:bold;">{ampm}</span>'
+            )
         self.date_label.setText(now.strftime("%A, %B %-d %Y"))
 
     def paintEvent(self, event):
@@ -113,6 +147,7 @@ class Clock(QWidget):
         if event.button() == Qt.LeftButton:
             self.releaseMouse()
             self._drag_pos = None
+            self._save_config()  # remember new position
 
     def mouseDoubleClickEvent(self, event):
         self.hide()

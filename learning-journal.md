@@ -40,6 +40,10 @@ Then PyQt5 wasn't installed, and installing it on Steam Deck hit three separate 
 
 **PyQt5 / Python**
 - Qt's stylesheet engine is **not real CSS** — properties like `text-shadow` are silently ignored with no error or warning; the shadow just doesn't appear
+- `QSystemTrayIcon` creates a small icon in the system tray (notification area) — useful for apps that should stay running in the background without taking up taskbar space
+- `Qt.Tool` window flag hides a window from the taskbar — needed when using a tray icon so the window doesn't appear in both places
+- `app.setQuitOnLastWindowClosed(False)` is required when hiding windows to tray — without it, hiding the last window shuts the whole app down
+- `menu.aboutToShow` signal fires just before a right-click menu appears — useful for updating checkbox states to reflect current app state before the user sees them
 
 ---
 
@@ -181,6 +185,59 @@ def mouseReleaseEvent(self, event):
 
 ---
 
+##### Fix 5 — `clock.py`: close on double-click → hide to system tray
+
+> **Why it was changed:** Closing the clock meant re-launching it from the terminal or app menu each time. A system tray icon lets it stay running in the background and be toggled without leaving the desktop.
+
+**Before:**
+```python
+def mouseDoubleClickEvent(self, event):
+    self.close()  # kills the app entirely
+```
+
+**After:**
+```python
+def mouseDoubleClickEvent(self, event):
+    self.hide()  # hides the window but keeps the app running
+```
+
+The tray icon is set up in a new `_init_tray()` method:
+
+```python
+def _init_tray(self):
+    self._tray = QSystemTrayIcon(QIcon.fromTheme("clock"), self)
+    self._tray.setToolTip("Steam Deck Clock")
+    menu = QMenu()
+    self._show_action = menu.addAction("Show")
+    self._show_action.setCheckable(True)   # gives it a checkbox
+    self._show_action.setChecked(True)     # ticked by default (clock starts visible)
+    self._show_action.triggered.connect(self._toggle_visibility)
+    menu.addSeparator()
+    menu.addAction("Quit", QApplication.instance().quit)
+    menu.aboutToShow.connect(self._update_show_action)  # sync checkbox before menu appears
+    self._tray.setContextMenu(menu)
+    self._tray.activated.connect(self._tray_clicked)    # left-click also toggles
+    self._tray.show()
+```
+
+Two supporting methods keep the checkbox in sync with the actual window state:
+
+```python
+def _update_show_action(self):
+    self._show_action.setChecked(self.isVisible())  # tick = visible, unticked = hidden
+
+def _toggle_visibility(self):
+    if self.isVisible():
+        self.hide()
+    else:
+        self.show()
+        self.raise_()  # bring to front if other windows are on top
+```
+
+`app.setQuitOnLastWindowClosed(False)` was also added in `main()` — without it, hiding the window would shut the whole app down.
+
+---
+
 #### Status
 
 | Issue | Status |
@@ -189,5 +246,6 @@ def mouseReleaseEvent(self, event):
 | `text-shadow` silently ignored by Qt | ✅ Fixed |
 | Clock autostart not configured | ✅ Fixed |
 | Drag breaks if mouse moves faster than window | ✅ Fixed |
+| No way to hide clock without closing it entirely | ✅ Fixed — system tray icon added |
 
 ---

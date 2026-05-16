@@ -44,6 +44,8 @@ Then PyQt5 wasn't installed, and installing it on Steam Deck hit three separate 
 - `Qt.Tool` window flag hides a window from the taskbar — needed when using a tray icon so the window doesn't appear in both places
 - `app.setQuitOnLastWindowClosed(False)` is required when hiding windows to tray — without it, hiding the last window shuts the whole app down
 - `menu.aboutToShow` signal fires just before a right-click menu appears — useful for updating checkbox states to reflect current app state before the user sees them
+- `QLabel` supports **HTML rich text** — wrap text in `<span style="...">` to style just part of a label differently (e.g. smaller AM/PM alongside a large time display)
+- User preferences can be saved to a **JSON config file** with Python's built-in `json` module — load on startup, write on change; no external libraries needed
 
 ---
 
@@ -240,6 +242,73 @@ def _toggle_visibility(self):
 
 #### Status
 
+##### Fix 6 — `clock.py`: position memory and 12/24-hour toggle
+
+> **Why it was added:** The clock always opened at `(40, 40)` regardless of where it was dragged. The 12/24-hour preference was also lost on every relaunch.
+
+Settings are saved to `~/.config/steam-deck-clock.json` as a small JSON file:
+
+```json
+{"x": 240, "y": 80, "use_24h": false}
+```
+
+**Loading on startup:**
+```python
+def _load_config(self):
+    try:
+        with open(CONFIG_PATH) as f:
+            return json.load(f)  # reads the saved JSON file
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}  # file doesn't exist yet — use defaults
+
+# In _init_ui(), position is restored:
+self.move(self._config.get("x", 40), self._config.get("y", 40))
+# .get("x", 40) means "use the saved x value, or 40 if there isn't one"
+```
+
+**Saving on drag end and preference change:**
+```python
+def _save_config(self):
+    with open(CONFIG_PATH, "w") as f:
+        json.dump({"x": self.x(), "y": self.y(), "use_24h": self._use_24h}, f)
+
+def mouseReleaseEvent(self, event):
+    if event.button() == Qt.LeftButton:
+        self.releaseMouse()
+        self._drag_pos = None
+        self._save_config()  # write position every time drag ends
+```
+
+**12/24-hour toggle in the tray menu:**
+```python
+self._24h_action = menu.addAction("24-hour clock")
+self._24h_action.setCheckable(True)
+self._24h_action.setChecked(self._use_24h)
+self._24h_action.triggered.connect(self._toggle_24h)
+
+def _toggle_24h(self, checked):
+    self._use_24h = checked
+    self._save_config()   # persist the preference immediately
+    self._tick()          # update the display right away, don't wait for next second
+```
+
+**AM/PM styled smaller using HTML rich text:**
+
+`QLabel` supports HTML — wrapping part of the text in a `<span>` lets you style it independently without needing a second label:
+
+```python
+time_str = now.strftime("%I:%M:%S")   # e.g. "03:45:12"
+ampm = now.strftime("%p")             # "AM" or "PM"
+self.time_label.setText(
+    f'{time_str} <span style="font-size:20pt; font-weight:bold;">{ampm}</span>'
+    # ↑ main time stays at 52pt, AM/PM drops to 20pt bold
+)
+```
+
+---
+
+#### Status
+
 | Issue | Status |
 |-------|--------|
 | `install.sh` used broken `pip install --user` | ✅ Fixed |
@@ -247,5 +316,6 @@ def _toggle_visibility(self):
 | Clock autostart not configured | ✅ Fixed |
 | Drag breaks if mouse moves faster than window | ✅ Fixed |
 | No way to hide clock without closing it entirely | ✅ Fixed — system tray icon added |
+| Clock forgets position and time format on relaunch | ✅ Fixed — JSON config file |
 
 ---

@@ -542,8 +542,11 @@ A `▶` button fades in on hover over any task row (using `QGraphicsOpacityEffec
 - [x] Left-clicking the tray icon hides/shows the window
 
 ## To Do
+- [ ] Add position memory to todo.py — window always opens at (460, 40), copy the JSON config pattern from clock.py so it remembers where you dragged it
+- [ ] Add in-app task entry — text input at the bottom of the To Do section, press Enter to write a new checkbox directly to the journal without opening the file
+- [ ] Add a session launch preview — before Konsole opens, show a small confirmation dialog showing the classification, working directory, and files that will be included; with a cancel button
+- [ ] Promote ideas with a note — when promoting an idea to To Do, allow a line of context to travel with it that gets included in the session launcher prompt
 - [ ] Add a Pomodoro timer that sits alongside the clock — 25 min work, 5 min break, with a colour shift when time is up
-
 - [ ] Revisit collapsed section row size — box shrinks but row height may need tuning for a tighter fold
 - [ ] Add battery percentage display to the clock
 - [ ] Add CPU/GPU temperature display to the clock

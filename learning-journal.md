@@ -465,11 +465,15 @@ def _on_file_changed(self, *_):
 - 2026-05-17 What if the clock background colour shifted gradually through the day — cool blue in the morning, warm amber in the evening?
 - 2026-05-17 Build a Decky Loader plugin that surfaces the to-do list inside Game Mode so you can see it without switching to the desktop
 - 2026-05-17 A habit tracker using the same diamond bullet system — daily habits that reset each morning
-- 2026-05-17 What would a minimal "focus mode" desktop look like? Just the clock, nothing else — everything else hidden with one keypress
 - 2026-05-17 Add a small weather widget using the Steam Deck's location — temperature and a weather icon next to the clock
 - 2026-05-17 A session log widget that tracks how long you've been at the desk today and nudges you to take a break
 
 ---
+
+## Testing
+- [ ] The to-do window appears automatically
+- [ ] A tray icon is visible in the taskbar (near the clock)
+- [ ] Left-clicking the tray icon hides/shows the window
 
 ## To Do
 - [ ] Add a Pomodoro timer that sits alongside the clock — 25 min work, 5 min break, with a colour shift when time is up

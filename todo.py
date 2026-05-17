@@ -25,6 +25,13 @@ def _read_section(heading):
         if in_sec: out.append(line)
     return out
 
+def read_testing():
+    out = []
+    for line in _read_section("Testing"):
+        m = re.match(r"^- \[([ x])\] (.+)", line)
+        if m: out.append({"text": m.group(2), "done": m.group(1) == "x"})
+    return out
+
 def read_todos():
     out = []
     for line in _read_section("To Do"):
@@ -358,12 +365,19 @@ class ToDoApp(QWidget):
         self._root=QVBoxLayout(self)
         self._root.setContentsMargins(20,14,20,16); self._root.setSpacing(8)
 
+        self._test_sec=CollapsibleSection("Testing")
+        self._root.addWidget(self._test_sec)
+
+        sep1=QWidget(); sep1.setFixedHeight(1)
+        sep1.setStyleSheet("background:rgba(255,255,255,28);")
+        self._root.addWidget(sep1)
+
         self._todo_sec=CollapsibleSection("To Do")
         self._root.addWidget(self._todo_sec)
 
-        sep=QWidget(); sep.setFixedHeight(1)
-        sep.setStyleSheet("background:rgba(255,255,255,28);")
-        self._root.addWidget(sep)
+        sep2=QWidget(); sep2.setFixedHeight(1)
+        sep2.setStyleSheet("background:rgba(255,255,255,28);")
+        self._root.addWidget(sep2)
 
         self._idea_sec=CollapsibleSection("Next Projects")
         self._root.addWidget(self._idea_sec)
@@ -436,7 +450,25 @@ class ToDoApp(QWidget):
 
     # ── Build lists ────────────────────────────────────────────────────────────
 
-    def _build_all(self): self._build_todos(); self._build_ideas()
+    def _build_all(self): self._build_testing(); self._build_todos(); self._build_ideas()
+
+    def _build_testing(self):
+        self._test_sec.clear_items()
+        items=[t for t in read_testing() if not t["done"]]
+        if items:
+            for t in items:
+                item=ToDoItem(t["text"])
+                item.party_at.connect(self._on_party)
+                item.removal_done.connect(lambda _,txt=t["text"]: self._on_removal(txt))
+                item.undo_requested.connect(self._on_undo)
+                item.bullet.clicked.connect(lambda txt=t["text"]: self._self_done.add(txt))
+                item.bullet.clicked.connect(lambda txt=t["text"]: self._animating.add(txt))
+                self._test_sec.add_item(item)
+        else:
+            lbl=QLabel("All checks passed.")
+            lbl.setStyleSheet("color:rgba(160,160,160,140);background:transparent;font-size:11pt;")
+            self._test_sec.add_item(lbl)
+        self.adjustSize()
 
     def _build_todos(self):
         self._todo_sec.clear_items(); self._item_widgets={}

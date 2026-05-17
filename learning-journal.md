@@ -483,4 +483,4 @@ def _on_file_changed(self, *_):
 - [ ] Add CPU/GPU temperature display to the clock
 - [ ] Add a "suggested ideas" panel to the to-do app
 - [ ] Explore building a Decky Loader plugin from scratch
-- [ ] Set up the to-do app in autostart alongside the clock
+- [x] Set up the to-do app in autostart alongside the clock

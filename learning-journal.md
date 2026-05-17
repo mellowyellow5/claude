@@ -537,9 +537,9 @@ A `▶` button fades in on hover over any task row (using `QGraphicsOpacityEffec
 ---
 
 ## Testing
-- [ ] The to-do window appears automatically
-- [ ] A tray icon is visible in the taskbar (near the clock)
-- [ ] Left-clicking the tray icon hides/shows the window
+- [x] The to-do window appears automatically
+- [x] A tray icon is visible in the taskbar (near the clock)
+- [x] Left-clicking the tray icon hides/shows the window
 
 ## To Do
 - [ ] Add a Pomodoro timer that sits alongside the clock — 25 min work, 5 min break, with a colour shift when time is up

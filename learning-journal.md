@@ -319,3 +319,11 @@ self.time_label.setText(
 | Clock forgets position and time format on relaunch | ✅ Fixed — JSON config file |
 
 ---
+
+## To Do
+
+- [ ] Add battery percentage display to the clock
+- [ ] Add CPU/GPU temperature display to the clock
+- [ ] Add a "suggested ideas" panel to the to-do app
+- [ ] Explore building a Decky Loader plugin from scratch
+- [ ] Set up the to-do app in autostart alongside the clock

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-import math, random, sys, re
+import math, os, random, shlex, subprocess, sys, re
 from datetime import date, datetime
 from PyQt5.QtWidgets import (QApplication, QGraphicsOpacityEffect,
     QHBoxLayout, QLabel, QMenu, QPushButton, QSystemTrayIcon, QVBoxLayout, QWidget)
-from PyQt5.QtCore import (Qt, QEasingCurve, QFileSystemWatcher, QPoint,
+from PyQt5.QtCore import (Qt, QEasingCurve, QEvent, QFileSystemWatcher, QPoint,
     QPropertyAnimation, QTimer, pyqtSignal)
-from PyQt5.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPolygon
+from PyQt5.QtGui import QColor, QCursor, QFont, QIcon, QPainter, QPen, QPolygon
 
 JOURNAL_PATH = "/home/deck/claude/learning-journal.md"
 IDEA_COLOR   = QColor(160, 120, 255, 210)
@@ -75,6 +75,92 @@ def idea_alpha(ds):
         days = (date.today() - datetime.strptime(ds,"%Y-%m-%d").date()).days
         return max(0.55, 1.0 - days/60)
     except ValueError: return 1.0
+
+
+# ── Session launcher ───────────────────────────────────────────────────────────
+
+_REVIEW_WORDS = {
+    "review","design","plan","discuss","research","decide",
+    "think","consider","explore","appears","visible","verify","check"
+}
+_CODE_WORDS = {
+    "add","fix","build","implement","create","update","refactor","debug",
+    "install","configure","write","battery","display","timer","widget",
+    "tracker","plugin","pomodoro","temperature","cpu","gpu","revisit",
+    "tray","taskbar","section","colour","color","weather","habit",
+    "autostart","percentage","toggle","log"
+}
+_DIR_MAP = [
+    ({"decky","plugin","homebrew","lsfg","framegen"}, "~/homebrew/plugins"),
+    ({"clock","todo","journal","pomodoro","weather","habit",
+      "timer","battery","temperature","cpu","gpu"}, "~/claude"),
+]
+
+def _classify(text):
+    low = text.lower()
+    r = sum(1 for w in _REVIEW_WORDS if w in low)
+    c = sum(1 for w in _CODE_WORDS   if w in low)
+    return "review" if r > c else "code"
+
+def _infer_dir(text):
+    low = text.lower()
+    for keywords, path in _DIR_MAP:
+        if any(k in low for k in keywords):
+            return os.path.expanduser(path)
+    return os.path.expanduser("~/claude")
+
+def _infer_files(text):
+    low = text.lower(); found = []
+    clock_kw = {"clock","battery","temperature","cpu","gpu","weather",
+                "pomodoro","colour","color","display","24h","12h"}
+    todo_kw  = {"todo","tray","taskbar","section","testing","animation",
+                "particle","idea","project","completion","bullet","widget"}
+    if any(k in low for k in clock_kw):
+        p = os.path.expanduser("~/claude/clock.py")
+        if os.path.exists(p): found.append(p)
+    if any(k in low for k in todo_kw):
+        p = os.path.expanduser("~/claude/todo.py")
+        if os.path.exists(p): found.append(p)
+    if not found:
+        d = os.path.expanduser("~/claude")
+        found = sorted(os.path.join(d,f) for f in os.listdir(d) if f.endswith(".py"))
+    return found
+
+def _build_prompt(task, files):
+    try:    journal = open(JOURNAL_PATH).read()
+    except: journal = ""
+    parts = [
+        "I need your help picking up where we left off on a task from my to-do list.\n\n",
+        f"**Task:** {task}\n\n---\n\n",
+        "**Learning journal:**\n\n", journal, "\n\n---\n\n",
+    ]
+    for fp in files:
+        try:
+            parts.append(f"**{os.path.basename(fp)}:**\n```python\n{open(fp).read()}\n```\n\n---\n\n")
+        except OSError: pass
+    parts.append(
+        f'Please read the context above, then help me work on: "{task}"\n'
+        "Briefly summarise what you understand about the current state, then propose next steps."
+    )
+    return "".join(parts)
+
+def launch_session(task):
+    mode     = _classify(task)
+    work_dir = _infer_dir(task)
+    prompt   = _build_prompt(task, _infer_files(task))
+    if mode == "code":
+        prompt_file = "/tmp/claude_prompt.txt"
+        script_file = "/tmp/claude_launch.sh"
+        open(prompt_file, "w").write(prompt)
+        open(script_file, "w").write(
+            f"#!/bin/bash\ncd {shlex.quote(work_dir)}\n"
+            f'claude "$(cat {prompt_file})"\nexec bash\n'
+        )
+        os.chmod(script_file, 0o755)
+        subprocess.Popen(["konsole", "--workdir", work_dir, "-e", "bash", script_file])
+    else:
+        QApplication.clipboard().setText(prompt)
+        subprocess.Popen(["xdg-open", "https://claude.ai/new"])
 
 
 # ── Particle system ────────────────────────────────────────────────────────────
@@ -169,9 +255,53 @@ class ToDoItem(QWidget):
         self.label.setStyleSheet("background:transparent;color:rgba(220,220,220,220);")
         layout.addWidget(self.label,1)
 
+        self._launch_btn=QPushButton("▶")
+        self._launch_btn.setFixedSize(26,26)
+        self._launch_btn.setCursor(Qt.PointingHandCursor)
+        self._launch_btn.setToolTip("Launch session")
+        self._launch_btn.setStyleSheet(
+            "QPushButton{background:transparent;border:none;"
+            "color:rgba(100,220,120,200);font-size:11pt;padding:0;}"
+            "QPushButton:hover{color:rgba(160,255,180,255);}")
+        self._launch_btn.clicked.connect(lambda: launch_session(self.text))
+        layout.addWidget(self._launch_btn,0,Qt.AlignVCenter)
+
+        self._launch_eff=QGraphicsOpacityEffect(self._launch_btn)
+        self._launch_eff.setOpacity(0.0)
+        self._launch_btn.setGraphicsEffect(self._launch_eff)
+        self._launch_fade=QPropertyAnimation(self._launch_eff,b"opacity")
+        self._launch_fade.setDuration(150)
+
+        self._hide_timer=QTimer(self); self._hide_timer.setSingleShot(True)
+        self._hide_timer.timeout.connect(self._maybe_hide)
+        for child in self.findChildren(QWidget):
+            child.installEventFilter(self)
+
+    def enterEvent(self,event):
+        self._hide_timer.stop(); self._anim_launch(1.0)
+
+    def leaveEvent(self,event):
+        self._hide_timer.start(80)
+
+    def eventFilter(self,obj,event):
+        t=event.type()
+        if t==QEvent.Enter:   self._hide_timer.stop(); self._anim_launch(1.0)
+        elif t==QEvent.Leave: self._hide_timer.start(80)
+        return False
+
+    def _anim_launch(self,target):
+        self._launch_fade.stop()
+        self._launch_fade.setStartValue(self._launch_eff.opacity())
+        self._launch_fade.setEndValue(target); self._launch_fade.start()
+
+    def _maybe_hide(self):
+        if not self.rect().contains(self.mapFromGlobal(QCursor.pos())):
+            self._anim_launch(0.0)
+
     def _on_click(self): mark_done(self.text); self.play_completion()
 
     def play_completion(self):
+        self._launch_btn.hide()
         self.bullet.hide()
         tick=QLabel("✓"); tick.setFont(QFont("Monospace",16,QFont.Bold))
         tick.setStyleSheet("color:rgba(80,210,100,230);background:transparent;")

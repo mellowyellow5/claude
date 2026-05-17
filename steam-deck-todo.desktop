@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Steam Deck To Do
+Comment=Floating to-do list and ideas panel
+Exec=/home/deck/clock-env/bin/python3 /home/deck/claude/todo.py
+Icon=checkbox
+Terminal=false
+Type=Application
+Categories=Utility;
+Keywords=todo;tasks;ideas;list;journal;
+StartupNotify=false

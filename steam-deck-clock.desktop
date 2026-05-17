@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Steam Deck Clock
 Comment=Transparent desktop clock with date
-Exec=python3 %f/clock.py
+Exec=/home/deck/clock-env/bin/python3 /home/deck/claude/clock.py
 Icon=clock
 Terminal=false
 Type=Application

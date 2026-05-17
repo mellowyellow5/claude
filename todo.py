@@ -129,9 +129,19 @@ def _infer_files(text):
         found = sorted(os.path.join(d,f) for f in os.listdir(d) if f.endswith(".py"))
     return found
 
-def _build_prompt(task, files):
+_CODE_OPENING = (
+    'Please read the context above, then help me work on: "{task}"\n'
+    "Briefly summarise what you understand about the current state, then propose next steps."
+)
+_REVIEW_OPENING = (
+    'Please read the context above, then let\'s think through: "{task}"\n'
+    "Summarise what you know about this topic from the journal, then share your thoughts and open up a discussion."
+)
+
+def _build_prompt(task, files, mode):
     try:    journal = open(JOURNAL_PATH).read()
     except: journal = ""
+    opening = (_CODE_OPENING if mode == "code" else _REVIEW_OPENING).format(task=task)
     parts = [
         "I need your help picking up where we left off on a task from my to-do list.\n\n",
         f"**Task:** {task}\n\n---\n\n",
@@ -141,29 +151,22 @@ def _build_prompt(task, files):
         try:
             parts.append(f"**{os.path.basename(fp)}:**\n```python\n{open(fp).read()}\n```\n\n---\n\n")
         except OSError: pass
-    parts.append(
-        f'Please read the context above, then help me work on: "{task}"\n'
-        "Briefly summarise what you understand about the current state, then propose next steps."
-    )
+    parts.append(opening)
     return "".join(parts)
 
 def launch_session(task):
-    mode     = _classify(task)
-    work_dir = _infer_dir(task)
-    prompt   = _build_prompt(task, _infer_files(task))
-    if mode == "code":
-        prompt_file = "/tmp/claude_prompt.txt"
-        script_file = "/tmp/claude_launch.sh"
-        open(prompt_file, "w").write(prompt)
-        open(script_file, "w").write(
-            f"#!/bin/bash\ncd {shlex.quote(work_dir)}\n"
-            f'claude "$(cat {prompt_file})"\nexec bash\n'
-        )
-        os.chmod(script_file, 0o755)
-        subprocess.Popen(["konsole", "--workdir", work_dir, "-e", "bash", script_file])
-    else:
-        QApplication.clipboard().setText(prompt)
-        subprocess.Popen(["xdg-open", "https://claude.ai/new"])
+    mode        = _classify(task)
+    work_dir    = _infer_dir(task)
+    prompt      = _build_prompt(task, _infer_files(task), mode)
+    prompt_file = "/tmp/claude_prompt.txt"
+    script_file = "/tmp/claude_launch.sh"
+    open(prompt_file, "w").write(prompt)
+    open(script_file, "w").write(
+        f"#!/bin/bash\ncd {shlex.quote(work_dir)}\n"
+        f'claude "$(cat {prompt_file})"\nexec bash\n'
+    )
+    os.chmod(script_file, 0o755)
+    subprocess.Popen(["konsole", "--workdir", work_dir, "-e", "bash", script_file])
 
 
 # ── Particle system ────────────────────────────────────────────────────────────

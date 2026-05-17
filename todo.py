@@ -98,9 +98,9 @@ _DIR_MAP = [
 
 def _classify(text):
     low = text.lower()
-    r = sum(1 for w in _REVIEW_WORDS if w in low)
+    r = sum(2 for w in _REVIEW_WORDS if w in low)  # review words worth double
     c = sum(1 for w in _CODE_WORDS   if w in low)
-    return "review" if r > c else "code"
+    return "code" if c > r else "review"            # ties go to review
 
 def _infer_dir(text):
     low = text.lower()
@@ -111,10 +111,13 @@ def _infer_dir(text):
 
 def _infer_files(text):
     low = text.lower(); found = []
-    clock_kw = {"clock","battery","temperature","cpu","gpu","weather",
-                "pomodoro","colour","color","display","24h","12h"}
-    todo_kw  = {"todo","tray","taskbar","section","testing","animation",
-                "particle","idea","project","completion","bullet","widget"}
+    plugin_kw = {"decky","plugin","homebrew","lsfg","framegen"}
+    clock_kw  = {"clock","battery","temperature","cpu","gpu","weather",
+                 "pomodoro","colour","color","display","24h","12h"}
+    todo_kw   = {"todo","tray","taskbar","section","testing","animation",
+                 "particle","idea","project","completion","bullet","widget"}
+    if any(k in low for k in plugin_kw):
+        return found  # no ~/claude files are relevant; journal provides the context
     if any(k in low for k in clock_kw):
         p = os.path.expanduser("~/claude/clock.py")
         if os.path.exists(p): found.append(p)

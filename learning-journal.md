@@ -320,6 +320,146 @@ self.time_label.setText(
 
 ---
 
+### 2026-05-17 — Building a PyQt5 to-do app linked to the learning journal
+
+**Category:** `PyQt5` · `Python` · `Git & Version Control` · `UI / Animations`
+
+**Goal:** Build a desktop to-do list that reads directly from `learning-journal.md`, stays in sync with the file, and has polished animations — collapsible sections, a party popper on completion, and a feed of project ideas.
+
+---
+
+#### What was built
+
+A floating PyQt5 window (`todo.py`) with two collapsible sections:
+
+- **To Do** — parses `- [ ]` and `- [x]` items from the `## To Do` section of the journal
+- **Next Projects** — parses `- YYYY-MM-DD idea text` entries from the `## Ideas` section
+
+Both sections can be collapsed by clicking their title. When collapsed, items roll up into the title bar and the surrounding box shrinks live with the animation. When expanded, they unfold back down.
+
+---
+
+#### Key learnings
+
+**PyQt5 / Animations**
+- `QPropertyAnimation` on `maximumHeight` collapses a widget — but `setFixedHeight()` sets BOTH `minimumHeight` AND `maximumHeight`, so the animation is blocked unless you call `setMinimumHeight(0)` first
+- To shrink the parent window live during an animation, connect `valueChanged` to `w.resize(w.width(), w.layout().sizeHint().height() + margins)` — `adjustSize()` alone doesn't always fire during animation
+- `QGraphicsOpacityEffect` + `QPropertyAnimation` on `b"opacity"` fades a widget smoothly from 1.0 to 0.0 — attach the effect with `widget.setGraphicsEffect(effect)` first
+- `QSequentialAnimationGroup` / `QParallelAnimationGroup` chain or combine multiple animations — always store a reference (e.g. `self._group`) or Python's garbage collector deletes the group before it finishes
+- `pyqtProperty(type)` with a getter and setter is required to animate custom properties (like a background alpha) with `QPropertyAnimation`
+
+**File watching**
+- `QFileSystemWatcher` monitors a file and emits `fileChanged` when it's saved — more responsive than polling, fires within milliseconds of a save
+- Some editors (and `git`) do **atomic saves** — they write to a temp file and rename it, which causes `QFileSystemWatcher` to lose track of the original path. Fix: re-add the path inside the `fileChanged` handler: `if path not in self._watcher.files(): self._watcher.addPath(path)`
+- Always have a fallback polling timer (`QTimer`) alongside the file watcher in case it drops the path
+
+**Architecture**
+- Keep a `_known` dict of `{item_text: done_bool}` to diff the file state on each change — this lets you detect which items newly became done and trigger their animation without rebuilding the whole list
+- Track `_animating` (items mid-animation) and `_self_done` (items we just clicked) as sets — this prevents double-triggering the completion animation when the file watcher fires after a local click
+- Custom painted widgets (`QWidget` + `paintEvent` + `QPainter`) are the right approach for non-standard shapes like diamonds and sparkle stars — Qt stylesheets can't do arbitrary shapes
+
+**Particles**
+- A particle system is just a list of objects with position, velocity, and lifetime — update position each frame, decrement lifetime, remove dead particles, call `update()` to repaint
+- The particle overlay must be a child widget with `WA_TransparentForMouseEvents` and `WA_TranslucentBackground` so it doesn't block clicks and doesn't draw a background
+- Call `self.raise_()` on the overlay before each burst so it sits above all other child widgets
+
+---
+
+#### What each feature looks like in code
+
+**Collapsible section (the key fix):**
+```python
+def toggle(self):
+    self._collapsed = not self._collapsed
+    if self._collapsed:
+        self._natural_h = self._content.sizeHint().height()
+        self._content.setMinimumHeight(0)          # ← without this, animation is blocked
+        self._anim = QPropertyAnimation(self._content, b"maximumHeight")
+        self._anim.setStartValue(self._natural_h)
+        self._anim.setEndValue(0)
+    else:
+        self._content.setMinimumHeight(0)
+        self._content.setMaximumHeight(0)
+        self._anim = QPropertyAnimation(self._content, b"maximumHeight")
+        self._anim.setStartValue(0)
+        self._anim.setEndValue(self._natural_h)
+        self._anim.finished.connect(lambda: self._content.setMaximumHeight(16777215))
+
+    self._anim.setDuration(280)
+    self._anim.setEasingCurve(QEasingCurve.InOutCubic)
+    self._anim.valueChanged.connect(self._resize_window)  # live window shrink
+    self._anim.start()
+
+def _resize_window(self):
+    w = self.window()
+    if w:
+        w.setMaximumHeight(16777215)
+        w.resize(w.width(), w.layout().sizeHint().height()
+                 + w.layout().contentsMargins().top()
+                 + w.layout().contentsMargins().bottom())
+```
+
+**Completion animation sequence:**
+```python
+def play_completion(self):
+    # 1. Swap diamond for ✓
+    self.bullet.hide()
+    tick = QLabel("✓")
+    tick.setFont(QFont("Monospace", 16, QFont.Bold))
+    tick.setStyleSheet("color:rgba(80,210,100,230);background:transparent;")
+    self.layout().insertWidget(0, tick)
+
+    # 2. Fire party burst at this item's position
+    self.party_at.emit(self.mapToGlobal(QPoint(self.width()//2, self.height()//2)))
+
+    # 3. After 1.2s (let the party settle), fade out over 1.5s
+    QTimer.singleShot(1200, self._fade_out)
+
+def _fade_out(self):
+    effect = QGraphicsOpacityEffect(self)
+    self.setGraphicsEffect(effect)          # attach opacity effect to this widget
+    self._opa = QPropertyAnimation(effect, b"opacity")
+    self._opa.setDuration(1500)
+    self._opa.setStartValue(1.0); self._opa.setEndValue(0.0)
+    self._opa.setEasingCurve(QEasingCurve.InCubic)
+    self._opa.finished.connect(self._collapse)
+    self._opa.start()                       # store as self._opa or GC kills it
+
+def _collapse(self):
+    self._ha = QPropertyAnimation(self, b"maximumHeight")
+    self._ha.setDuration(400)
+    self._ha.setStartValue(self.height()); self._ha.setEndValue(0)
+    self._ha.finished.connect(self.removal_done.emit)  # signal parent to rebuild list
+    self._ha.start()
+```
+
+**File watcher with atomic-save fix:**
+```python
+self._watcher = QFileSystemWatcher([JOURNAL_PATH])
+self._watcher.fileChanged.connect(self._on_file_changed)
+
+def _on_file_changed(self, *_):
+    # Re-add path if atomic save caused watcher to lose it
+    if JOURNAL_PATH not in self._watcher.files():
+        self._watcher.addPath(JOURNAL_PATH)
+    # Compare new state to known state — animate newly completed items
+    ...
+```
+
+---
+
+#### Status
+
+| Issue | Status |
+|-------|--------|
+| Collapsible sections with live box resize | ✅ Built |
+| Completion animation (tick → party → fade → collapse) | ✅ Built |
+| File watcher auto-detects external journal edits | ✅ Built |
+| Next Projects ideas feed with promote/dismiss | ✅ Built |
+| Collapsed section row height — box could fold tighter | 🔲 To Do |
+
+---
+
 ## Ideas
 
 - 2026-05-17 What if the clock background colour shifted gradually through the day — cool blue in the morning, warm amber in the evening?

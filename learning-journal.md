@@ -460,6 +460,72 @@ def _on_file_changed(self, *_):
 
 ---
 
+### 2026-05-17 — Taskbar integration and one-click session launcher
+
+**Category:** `PyQt5` · `Python` · `Linux / Wayland` · `UX`
+
+**Goal:** Make the to-do app a proper desktop citizen — system tray icon like the clock, autostart on login, and a one-click button on each task that opens a fully-contextualised Claude Code session.
+
+---
+
+#### What was built
+
+**System tray icon**
+Added `QSystemTrayIcon` to `todo.py` matching the pattern already used in `clock.py` — left-click toggles the window, right-click gives a Show/Quit menu. Two `.desktop` files were created: one in `~/.local/share/applications/` (app launcher) and one in `~/.config/autostart/` (launches automatically at Desktop Mode login).
+
+**Testing section**
+Added a `## Testing` heading to the journal and a matching collapsible section in the app — same `ToDoItem` widgets, reads `- [ ]` checkboxes from the new heading. Seeded with three post-autostart checklist items.
+
+**One-click session launcher**
+A `▶` button fades in on hover over any task row (using `QGraphicsOpacityEffect` + `QPropertyAnimation` on the opacity). Clicking it:
+1. Classifies the task as `code` or `review` using keyword scoring
+2. Infers the working directory from the task text
+3. Selects relevant source files (e.g. "battery" → `clock.py`, "tray" → `todo.py`)
+4. Assembles a prompt: task text + full learning journal + file contents
+5. Writes the prompt to `/tmp/claude_prompt.txt` and a launch script to `/tmp/claude_launch.sh`
+6. Opens Konsole in the inferred directory, running `claude "$(cat /tmp/claude_prompt.txt)"`
+
+---
+
+#### Key learnings
+
+**PyQt5 / Hover behaviour**
+- `enterEvent` / `leaveEvent` on a parent widget fire when the mouse enters/leaves the widget's own background area — moving into a *child* widget triggers `leaveEvent` on the parent, which would hide the button prematurely
+- Fix: install an `eventFilter` on all child widgets so Enter/Leave events from children also reach the parent; use a short `QTimer` (80ms) to debounce — if another Enter fires before the timer triggers, it cancels the hide
+- `QGraphicsOpacityEffect` + `QPropertyAnimation` on `b"opacity"` is the cleanest way to fade a widget without affecting layout — the button always takes up space so the row doesn't jump on hover
+
+**Linux / Wayland clipboard**
+- `QApplication.clipboard().setText(text)` is *volatile* on Wayland — the clipboard is owned by the app that wrote to it, and the content is released the moment that app loses focus
+- When a browser is opened immediately after, the todo window loses focus → clipboard is cleared → the browser opens to an empty paste box
+- Fix: write context to a file instead, and pass it via `$(cat file)` in the shell script — files don't have an ownership model, so the content persists regardless of focus
+
+**Routing / classification**
+- Simple keyword scoring works well for routing (code vs review), but review words need double weight — "explore" (1 review word) was being outscored by "building" + "plugin" (2 code words), so it routed to CODE
+- Changing tie-breaking to favour review (only route to code if `code_score > review_score`, not `>=`) fixed the edge case
+- Tasks mentioning Decky/plugin keywords should not fall back to `~/claude/*.py` as context — those files are irrelevant; the journal alone provides sufficient background
+
+**Shell quoting**
+- Embedding a long multi-line prompt as a shell argument is error-prone — special characters, newlines, and quotes all need escaping
+- Safer pattern: write raw prompt to a temp file, read it back in the script with `"$(cat /tmp/file)"` — the double quotes handle newlines and spaces; no manual escaping needed
+
+---
+
+#### Status
+
+| Feature | Status |
+|---------|--------|
+| System tray icon (Show/Quit menu, left-click toggle) | ✅ Built |
+| Autostart .desktop files | ✅ Built |
+| Testing collapsible section | ✅ Built |
+| Hover `▶` button with fade animation | ✅ Built |
+| Task classification (code vs review) | ✅ Built |
+| Context assembly (journal + source files) | ✅ Built |
+| Konsole launch with pre-loaded Claude session | ✅ Built |
+| Wayland clipboard issue | ✅ Fixed — file-based approach |
+| Routing edge cases (explore/Decky) | ✅ Fixed |
+
+---
+
 ## Ideas
 
 - 2026-05-17 What if the clock background colour shifted gradually through the day — cool blue in the morning, warm amber in the evening?

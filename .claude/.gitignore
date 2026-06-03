@@ -1,0 +1,9 @@
+# Deny by default
+*
+# Force-allow only the system files
+!.gitignore
+!settings.json
+!skills/
+!skills/**
+!hooks/
+!hooks/**
